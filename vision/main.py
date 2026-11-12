@@ -2,12 +2,10 @@
 ================================================================
   DETECTIE VIDEO AMBULANTA - Sistem Intersectie Inteligenta
 ================================================================
-  Versiune: 4.1 (Linii Independente)
-  Nou in v4.1:
-    Cele 4 zone (NORD, SUD, EST, VEST) au acum linii de separare
-    independente. Zona dintre ele (mijlocul intersectiei) este
-    complet ignorata. Trage de fiecare linie in parte pentru a
-    stabili exact marginile de intrare din intersectie.
+  Versiune: 4.2 (Linii Independente + CLI)
+  Nou in v4.2:
+    - Suport argumente --port, --camera, --video.
+    - Zone disjuncte pentru evitarea falselor detecții la graniță.
 
   Dependente:
     pip install opencv-python pyserial numpy
