@@ -7,7 +7,7 @@ Camera detectează lumina albastră în mișcare (ambulanță) într-una din cel
 `Cameră` → `Python/OpenCV` → `Serial` → `Arduino` → `Semafoare, Bariere, Senzori`
 
 ### Poze și Demo
-(Adăugați aici poze/GIF-uri cu macheta și fereastra OpenCV din folderul `docs/`)
+![Referință Fundal](docs/background_reference.png)
 
 ### Protocol Serial
 - `'1' - '4'`: Direcția ambulanței (1=NORD, 2=SUD, 3=EST, 4=VEST)
