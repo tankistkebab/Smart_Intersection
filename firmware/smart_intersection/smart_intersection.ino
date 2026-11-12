@@ -2,7 +2,7 @@
  * ============================================================
  * CONTROLER INTERSECȚIE INTELIGENTĂ CU PRIORITATE AMBULANȚĂ
  * ============================================================
- * Autor   : Junie (AI Assistant)
+ * Autor   : Dinca Stefan Adrian
  * Versiune: 1.2 (Senzori Non-Blocanti + Fix Logica)
  * Descriere:
  * Sistem hibrid Arduino + Python pentru gestionarea unei
