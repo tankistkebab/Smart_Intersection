@@ -2,8 +2,8 @@
  * ============================================================
  * CONTROLER INTERSECȚIE INTELIGENTĂ CU PRIORITATE AMBULANȚĂ
  * ============================================================
- * Autor   : Junie
- * Versiune: 1.2 (Senzori Non-Blocanti + Corectii Logica)
+ * Autor   : Junie (AI Assistant)
+ * Versiune: 1.2 (Senzori Non-Blocanti + Fix Logica)
  * Descriere:
  * Sistem hibrid Arduino + Python pentru gestionarea unei
  * intersecții cu 4 direcții. Suportă mod standard de
@@ -58,7 +58,7 @@ int  ambulanceDir    = -1;   // Direcția ambulanței (-1 = niciuna)
 // ============================================================
 void setup() {
   Serial.begin(9600);
-  Serial.println(F("[SISTEM] Intersectie Inteligenta v1.1 - Init..."));
+  Serial.println(F("[SISTEM] Intersectie Inteligenta v1.2 - Init..."));
 
   // Inițializează pinii semafoare ca OUTPUT
   for (int i = 0; i < 4; i++) {
@@ -161,8 +161,9 @@ void handleStandardCycle() {
 //  MOD AMBULANȚĂ: Prioritate imediată + Bariere Non-Blocante
 // ============================================================
 void handleAmbulanceMode() {
+  const int dir = ambulanceDir; // Salvăm direcția pentru a evita modificări accidentale în timpul ciclului
   Serial.print(F("[AMBULANTA] Prioritate activata pentru directia "));
-  Serial.println(ambulanceDir);
+  Serial.println(dir);
 
   // Pasul 1: Toate semafoarele pe Galben
   for (int i = 0; i < 4; i++) {
@@ -172,12 +173,12 @@ void handleAmbulanceMode() {
 
   // Pasul 2: Direcția ambulanței → Verde; celelalte → Roșu
   for (int i = 0; i < 4; i++) {
-    if (i == ambulanceDir) setTrafficLight(i, GREEN);
-    else                   setTrafficLight(i, RED);
+    if (i == dir) setTrafficLight(i, GREEN);
+    else          setTrafficLight(i, RED);
   }
 
   // Pasul 3: Ridică bariera pe direcția ambulanței (dacă era coborâtă)
-  raiseBarrier(ambulanceDir);
+  raiseBarrier(dir);
 
   // Pasul 4 & 5: Verificare independentă pentru coborârea celorlalte bariere
   Serial.println(F("[BARIERE] Initiere coborare independenta..."));
@@ -185,7 +186,7 @@ void handleAmbulanceMode() {
   // Array pentru a urmări ce bariere mai trebuie coborâte
   bool barrierNeedsToClose[4];
   for (int i = 0; i < 4; i++) {
-    if (i != ambulanceDir) {
+    if (i != dir) {
       barrierNeedsToClose[i] = true; 
     } else {
       barrierNeedsToClose[i] = false; // Bariera ambulanței rămâne sus
@@ -196,8 +197,9 @@ void handleAmbulanceMode() {
   
   // În loc de delay() pasiv, monitorizăm senzorii pe durata priorității
   while (millis() - startAmbulance < (unsigned long)AMBULANCE_GREEN) {
-    checkSerialInput(); // Citim serialul si in timpul modului ambulanta pentru a nu acumula comenzi
-    
+    checkSerialInput(); // Citim serialul si in timpul modului ambulanta
+    if (!ambulanceMode) break; // Ieșim dacă s-a primit '0'
+
     for (int i = 0; i < 4; i++) {
       if (barrierNeedsToClose[i]) {
         float dist = getDistance(i);
@@ -209,16 +211,16 @@ void handleAmbulanceMode() {
           
           Serial.print(F("[BARIERA] Coborata pe directia "));
           Serial.println(i);
-          delay(150); // Scurtă pauză pentru stabilitatea sursei de curent a servo-ului
+          delay(150); // Scurtă pauză pentru stabilitatea sursei de curent
         }
       }
     }
-    delay(50); // Pauză mică pentru a nu bloca procesorul și senzorii
+    delay(50); 
   }
 
   // Pasul 6: Revenire la modul standard
   ambulanceMode = false;
-  currentGreen  = ambulanceDir;
+  currentGreen  = dir;
   ambulanceDir  = -1;
 
   Serial.println(F("[SISTEM] Revenire la ciclu standard. Ridicare bariere..."));
@@ -256,7 +258,10 @@ float getDistance(int dir) {
   digitalWrite(US_TRIG[dir], LOW);
 
   long duration = pulseIn(US_ECHO[dir], HIGH, 30000); 
-  // Daca duration == 0 (timeout/deconectat), returnam 0.0 (pericol) in loc de 999.0
+  // NOTĂ: Dacă duration == 0, înseamnă timeout (fără ecou). Pe machetă, acest lucru
+  // poate fi interpretat ca "drum liber" sau "eroare senzor".
+  // Aici tratăm 0.0 ca "pericol" pentru a evita coborârea barierei peste o mașină
+  // dacă senzorul dă rateuri, dar asta poate bloca barierele sus dacă nu există ecou.
   float distance = (duration <= 0) ? 0.0 : (duration * 0.0343) / 2.0;
 
   return distance;
