@@ -1,0 +1,7 @@
+.idea/
+__pycache__/
+venv/
+zone_config.json
+*.png
+*.jpg
+*.mp4
