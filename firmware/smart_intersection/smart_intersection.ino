@@ -2,8 +2,8 @@
  * ============================================================
  * CONTROLER INTERSECȚIE INTELIGENTĂ CU PRIORITATE AMBULANȚĂ
  * ============================================================
- * Autor   : Student Proiect
- * Versiune: 1.1 (Senzori Non-Blocanti)
+ * Autor   : Junie
+ * Versiune: 1.2 (Senzori Non-Blocanti + Corectii Logica)
  * Descriere:
  * Sistem hibrid Arduino + Python pentru gestionarea unei
  * intersecții cu 4 direcții. Suportă mod standard de
@@ -25,7 +25,7 @@ const int TL_PINS[4][3] = {
 
 // ─── CONFIGURARE PINI SENZORI ULTRASONICI ───────────────────
 const int US_TRIG[4] = {23, 25, 44, 28}; // Trig: NORD, SUD, EST, VEST
-const int US_ECHO[4] = {22, 24, 45, 26}; // Echo: NORD, SUD, EST, VEST (corectat 269 -> 29)
+const int US_ECHO[4] = {22, 24, 45, 26}; // Echo: NORD, SUD, EST, VEST
 
 // ─── CONFIGURARE PINI SERVOMOTOARE ──────────────────────────
 const int SV_PINS[4] = {3, 5, 9, 6}; // NORD, SUD, EST, VEST
@@ -142,6 +142,10 @@ void handleStandardCycle() {
   waitWithSerialCheck(YELLOW_DURATION);
   if (ambulanceMode) return;
 
+  // Pas intermediar: Toate semafoarele pe ROSU (faza de siguranta)
+  for (int i = 0; i < 4; i++) {
+    setTrafficLight(i, RED);
+  }
   waitWithSerialCheck(RED_MIN_DURATION);
   if (ambulanceMode) return;
 
@@ -192,6 +196,7 @@ void handleAmbulanceMode() {
   
   // În loc de delay() pasiv, monitorizăm senzorii pe durata priorității
   while (millis() - startAmbulance < (unsigned long)AMBULANCE_GREEN) {
+    checkSerialInput(); // Citim serialul si in timpul modului ambulanta pentru a nu acumula comenzi
     
     for (int i = 0; i < 4; i++) {
       if (barrierNeedsToClose[i]) {
@@ -251,7 +256,8 @@ float getDistance(int dir) {
   digitalWrite(US_TRIG[dir], LOW);
 
   long duration = pulseIn(US_ECHO[dir], HIGH, 30000); 
-  float distance = (duration == 0) ? 999.0 : (duration * 0.0343) / 2.0;
+  // Daca duration == 0 (timeout/deconectat), returnam 0.0 (pericol) in loc de 999.0
+  float distance = (duration <= 0) ? 0.0 : (duration * 0.0343) / 2.0;
 
   return distance;
 }

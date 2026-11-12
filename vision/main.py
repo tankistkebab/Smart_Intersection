@@ -26,21 +26,23 @@ import time
 import sys
 import json
 import os
+import argparse
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-# ── CONFIGURARE GENERALA ──────────────────────────────────────
+# ── CONFIGURARE PARAMETRI (MODIFICABILI PRIN CLI) ──────────
 PORT_SERIAL         = 'COM3'
 BAUD_RATE           = 9600
 DETECT_TIME         = 2.0
 COOLDOWN_TIME       = 10.0
 CAMERA_INDEX        = 0
+VIDEO_SOURCE        = None
 
 CALIBRATION_SECONDS = 2.0
 DIFF_THRESHOLD      = 30
 MIN_MOTION_AREA     = 800
 MIN_CONTOUR_AREA    = 400
-ZONE_CONFIG_FILE    = "zone_config.json"
+ZONE_CONFIG_FILE    = os.path.join(os.path.dirname(__file__), "zone_config.json")
 
 # ── PRAG CULOARE ALBASTRA (HSV) ───────────────────────────────
 BLUE_HSV_LOW  = np.array([100, 120,  70])
@@ -209,11 +211,18 @@ def zone_editor(cap) -> Tuple[int, int, int, int]:
 #  CONSTRUCTIE DREPTUNGHIURI DIN 4 LINII
 # ══════════════════════════════════════════════════════════════
 def build_zone_rects(line_n, line_s, line_e, line_w, h, w):
+    """
+    Construieste zonele astfel incat sa fie disjuncte.
+    NORD: deasupra line_n, intre line_w si line_e
+    SUD:  dedesubt line_s, intre line_w si line_e
+    EST:  la dreapta de line_e, pe toata inaltimea
+    VEST: la stanga de line_w, pe toata inaltimea
+    """
     return [
-        (0,      0,      w,      line_n), # 0: NORD (de sus pana la line_n)
-        (0,      line_s, w,      h),      # 1: SUD  (de la line_s in jos)
-        (line_e, 0,      w,      h),      # 2: EST  (de la line_e in dreapta)
-        (0,      0,      line_w, h),      # 3: VEST (din stanga pana la line_w)
+        (line_w, 0,      line_e, line_n), # 0: NORD
+        (line_w, line_s, line_e, h),      # 1: SUD
+        (line_e, 0,      w,      h),      # 2: EST
+        (0,      0,      line_w, h),      # 3: VEST
     ]
 
 
@@ -228,20 +237,38 @@ def _draw_zone_lines(frame, line_n, line_s, line_e, line_w, w, h):
 #  FUNCTIE PRINCIPALA
 # ══════════════════════════════════════════════════════════════
 def main():
-    arduino = None
-    try:
-        arduino = serial.Serial(PORT_SERIAL, BAUD_RATE, timeout=1)
-        time.sleep(2)
-        print(f"[SERIAL] Conectat pe {PORT_SERIAL}.")
-    except serial.SerialException as e:
-        print(f"[AVERTISMENT] {e} — mod DEMO activ.")
+    global PORT_SERIAL, CAMERA_INDEX, VIDEO_SOURCE
 
-    cap = cv2.VideoCapture(CAMERA_INDEX)
+    parser = argparse.ArgumentParser(description="Emergency Vehicle Detection - Smart Intersection")
+    parser.add_argument("--port", type=str, default=PORT_SERIAL, help="Port Serial Arduino (ex: COM3 sau None)")
+    parser.add_argument("--camera", type=int, default=CAMERA_INDEX, help="Index Camera (default: 0)")
+    parser.add_argument("--video", type=str, help="Cale fisier video pentru demo")
+    args = parser.parse_args()
+
+    PORT_SERIAL = args.port
+    CAMERA_INDEX = args.camera
+    VIDEO_SOURCE = args.video
+
+    arduino = None
+    if PORT_SERIAL and PORT_SERIAL.lower() != 'none':
+        try:
+            arduino = serial.Serial(PORT_SERIAL, BAUD_RATE, timeout=1)
+            time.sleep(2)
+            print(f"[SERIAL] Conectat pe {PORT_SERIAL}.")
+        except serial.SerialException as e:
+            print(f"[AVERTISMENT] {e} — mod DEMO activ.")
+    else:
+        print("[INFO] Mod DEMO activ (fara hardware serial).")
+
+    source = VIDEO_SOURCE if VIDEO_SOURCE else CAMERA_INDEX
+    cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        print(f"[EROARE] Nu pot accesa camera {CAMERA_INDEX}.")
+        print(f"[EROARE] Nu pot accesa sursa video: {source}")
         sys.exit(1)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    if not VIDEO_SOURCE:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     print("\n[PASUL 1/3] EDITOR ZONE — pozitioneaza marginile.")
     line_n, line_s, line_e, line_w = zone_editor(cap)
@@ -291,6 +318,8 @@ def main():
             continue
 
         # ── Detecție mișcare + Albastru ──
+        # MOG2 ar fi o imbunatatire viitoare pentru adaptabilitate la lumina.
+        # Momentan folosim absdiff cu fundal calibrat o singura data.
         diff = cv2.absdiff(gray, np.uint8(background_ref))
         _, motion_mask = cv2.threshold(diff, DIFF_THRESHOLD, 255, cv2.THRESH_BINARY)
         motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN,  kernel_small)
